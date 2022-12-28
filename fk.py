@@ -40,6 +40,70 @@ def get_panda_DH_params():
 
     return dh_params
 
+def get_transform_to_base_from(level: int, pose: list, DH_params: dict) -> np.matrix:
+    T = np.matrix(np.identity(4))
+
+    for i in range(level):
+        cos_th_i = np.cos(pose[i])
+        sin_th_i = np.sin(pose[i])
+        a_i = DH_params[i]["a"]
+        cos_alpha_i = np.cos(DH_params[i]["alpha"])
+        sin_alpha_i = np.sin(DH_params[i]["a"])
+        d_i = DH_params[i]["d"]
+
+        T = T @ np.matrix([[cos_th_i, -1*sin_th_i, 0, a_i],
+                [sin_th_i*cos_alpha_i, cos_th_i*cos_alpha_i, -1*sin_alpha_i, -1*d_i*sin_alpha_i],
+                [sin_th_i*sin_alpha_i, cos_th_i*sin_alpha_i, cos_alpha_i, d_i*cos_alpha_i], 
+                [0,0,0,1]])
+
+    return T
+
+def get_R_to_base_from(level: int, pose: list, DH_params: dict) -> np.matrix:
+    return get_transform_to_base_from(level, pose, DH_params)[0:3,0:3]  # this is just a wrapper function to get R from T
+
+def construct_P_to_base_from(l:int , q: np.ndarray, DH_params: dict):
+    P = get_transform_to_base_from(l, q, DH_params) @ np.matrix([[0],
+                                                                [0],
+                                                                [0],
+                                                                [1]])
+    return P
+
+def calc_Z(l: int, q: np.ndarray, DH_params: dict) -> np.matrix:
+    Z = get_R_to_base_from(l, q, DH_params) @ np.matrix([[0],
+                                                        [0],
+                                                        [1]])
+    return Z
+
+def calc_P(l: int, q: np.ndarray, n_joints: int, DH_params: dict) -> np.matrix:
+    P_to_final_joint_from_effector = np.matrix([[1, 0, 0, 0],
+                                            [0, 1, 0, 0],
+                                            [0, 0, 1, 0.107],
+                                            [0, 0, 0, 1]])
+    P_0E = get_transform_to_base_from(n_joints, q, DH_params) @ P_to_final_joint_from_effector @ np.matrix([[0],
+                                                                                                            [0],
+                                                                                                            [0],
+                                                                                                            [1]])
+
+    P_0_from_i_1 = construct_P_to_base_from(l, q, DH_params)
+
+    P = P_0E - P_0_from_i_1
+
+    return P[0:3,0]
+
+def construct_jacobian(n_joints: int, q: np.ndarray, DH_params: dict):
+    J = np.matrix(np.zeros((6,n_joints)))
+
+    for i in range(n_joints):
+        Z = calc_Z(i, q, DH_params)
+        P = calc_P(i, q, n_joints, DH_params)
+
+        J_Li = np.cross(np.squeeze(Z), np.squeeze(P))
+        J_Ai = np.squeeze(Z)
+
+        J[:,i] = np.vstack((J_Li.T,J_Ai.T))  # TODO check if this works
+    
+    return J
+
 def your_fk(robot, DH_params : dict, q : list or tuple or np.ndarray) -> np.ndarray:
 
     # robot initial position
@@ -54,7 +118,7 @@ def your_fk(robot, DH_params : dict, q : list or tuple or np.ndarray) -> np.ndar
 
     # -------------------------------------------------------------------------------- #
     # --- TODO: Read the task description                                          --- #
-    # --- Task 1 : Compute Forward-Kinematic and Jacobain of the robot by yourself --- #
+    # --- Task 1 : Compute Forward-Kinematic and Jacobian of the robot by yourself --- #
     # ---          Try to implement `your_fk` function without using any pybullet  --- #
     # ---          API. (20% for accuracy)                                         --- #
     # -------------------------------------------------------------------------------- #
@@ -62,7 +126,11 @@ def your_fk(robot, DH_params : dict, q : list or tuple or np.ndarray) -> np.ndar
     #### your code ####
 
     # A = ? # may be more than one line
+    A = get_transform_to_base_from(7, base_pose, DH_params)
+        
     # jacobian = ? # may be more than one line
+    n_joints = 7  # 420 hehe
+    jacobian = construct_jacobian(n_joints, q, DH_params)    
 
     # -45 degree adjustment along z axis
     # details : see "pybullet_robot_envs/panda_envs/robot_data/franka_panda/panda_model.urdf"
