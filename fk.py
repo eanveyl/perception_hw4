@@ -48,7 +48,7 @@ def get_transform_to_base_from(level: int, pose: list, DH_params: dict) -> np.ma
         sin_th_i = np.sin(pose[i])
         a_i = DH_params[i]["a"]
         cos_alpha_i = np.cos(DH_params[i]["alpha"])
-        sin_alpha_i = np.sin(DH_params[i]["a"])
+        sin_alpha_i = np.sin(DH_params[i]["alpha"])
         d_i = DH_params[i]["d"]
 
         T = T @ np.matrix([[cos_th_i, -1*sin_th_i, 0, a_i],
@@ -126,7 +126,7 @@ def your_fk(robot, DH_params : dict, q : list or tuple or np.ndarray) -> np.ndar
     #### your code ####
 
     # A = ? # may be more than one line
-    A = get_transform_to_base_from(7, base_pose, DH_params)
+    A = A@get_transform_to_base_from(7, q, DH_params)
         
     # jacobian = ? # may be more than one line
     n_joints = 7  # 420 hehe
@@ -189,6 +189,8 @@ def score_fk(robot, testcase_files : str, visualize : bool=False):
                 draw_coordinate(gt_pose, size=0.01, color=color_gt)
 
             fk_error = np.linalg.norm(your_pose - np.asarray(gt_pose), ord=2)
+            print("Your pose=\n", your_pose)
+            print("GT pose=\n", gt_pose)
             if fk_error > FK_ERROR_THRESH:
                 fk_score[file_id] -= penalty
                 fk_error_cnt[file_id] += 1
