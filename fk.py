@@ -43,20 +43,8 @@ def get_panda_DH_params():
 def get_transform_to_base_from(level: int, pose: list, DH_params: dict, use_inclusive_range: bool=False) -> np.matrix:
     T = np.matrix(np.identity(4))
 
-    # if level == 0:  # use this because range(0) won't calculate anything
-    #     # calculate first Transform 0 <- 1
-    #     cos_th_i = np.cos(pose[0])
-    #     sin_th_i = np.sin(pose[0])
-    #     a_i = DH_params[0]["a"]
-    #     cos_alpha_i = np.cos(DH_params[0]["alpha"])
-    #     sin_alpha_i = np.sin(DH_params[0]["alpha"])
-    #     d_i = DH_params[0]["d"]
-
-    #     # modified DH convention
-    #     T = T @ np.matrix([[cos_th_i, -1*sin_th_i, 0, a_i],
-    #             [sin_th_i*cos_alpha_i, cos_th_i*cos_alpha_i, -1*sin_alpha_i, -1*d_i*sin_alpha_i],
-    #             [sin_th_i*sin_alpha_i, cos_th_i*sin_alpha_i, cos_alpha_i, d_i*cos_alpha_i], 
-    #             [0,0,0,1]])
+    if level != len(DH_params):
+        use_inclusive_range = True
         
     for i in range(level):
         cos_th_i = np.cos(pose[i])
@@ -72,7 +60,7 @@ def get_transform_to_base_from(level: int, pose: list, DH_params: dict, use_incl
                 [sin_th_i*sin_alpha_i, cos_th_i*sin_alpha_i, cos_alpha_i, d_i*cos_alpha_i], 
                 [0,0,0,1]])
 
-    if use_inclusive_range or level == 0:
+    if use_inclusive_range:
         # use this because range(0) won't calculate anything
         # calculate first Transform 0 <- 1
         cos_th_i = np.cos(pose[level])
@@ -87,28 +75,11 @@ def get_transform_to_base_from(level: int, pose: list, DH_params: dict, use_incl
                 [sin_th_i*cos_alpha_i, cos_th_i*cos_alpha_i, -1*sin_alpha_i, -1*d_i*sin_alpha_i],
                 [sin_th_i*sin_alpha_i, cos_th_i*sin_alpha_i, cos_alpha_i, d_i*cos_alpha_i], 
                 [0,0,0,1]])
-    # i = 0
-    # while i <= level and i < len(DH_params)-1:
-    #     cos_th_i = np.cos(pose[i])
-    #     sin_th_i = np.sin(pose[i])
-    #     a_i = DH_params[i]["a"]
-    #     cos_alpha_i = np.cos(DH_params[i]["alpha"])
-    #     sin_alpha_i = np.sin(DH_params[i]["alpha"])
-    #     d_i = DH_params[i]["d"]
-
-    #     # modified DH convention
-    #     T = T @ np.matrix([[cos_th_i, -1*sin_th_i, 0, a_i],
-    #             [sin_th_i*cos_alpha_i, cos_th_i*cos_alpha_i, -1*sin_alpha_i, -1*d_i*sin_alpha_i],
-    #             [sin_th_i*sin_alpha_i, cos_th_i*sin_alpha_i, cos_alpha_i, d_i*cos_alpha_i], 
-    #             [0,0,0,1]])
-        
-    #     i += 1
-
 
     return T
 
 def calc_Z(l: int, q: np.ndarray, DH_params: dict, base_pose: np.ndarray) -> np.matrix:
-    Z = (base_pose @ get_transform_to_base_from(l, q, DH_params, use_inclusive_range=True))[:3,:3] @ np.matrix([[0],
+    Z = (base_pose @ get_transform_to_base_from(l, q, DH_params))[:3,:3] @ np.matrix([[0],
                                                                                     [0],
                                                                                     [1]])
     return Z
@@ -119,7 +90,7 @@ def calc_P(l: int, q: np.ndarray, n_joints: int, DH_params: dict, base_pose: np.
                                                                                     [0],
                                                                                     [1]])
 
-    P_0_from_i_1 = base_pose @ get_transform_to_base_from(l, q, DH_params, use_inclusive_range=True) @ np.matrix([[0],
+    P_0_from_i_1 = base_pose @ get_transform_to_base_from(l, q, DH_params) @ np.matrix([[0],
                                                                                     [0],
                                                                                     [0],
                                                                                     [1]])
@@ -138,7 +109,7 @@ def construct_jacobian(n_joints: int, q: np.ndarray, DH_params: dict, base_pose:
         J_Li = np.cross(np.squeeze(Z), np.squeeze(P))
         J_Ai = np.squeeze(Z)
 
-        J[:,i] = np.vstack((J_Li.T,J_Ai.T))  # TODO check if this works
+        J[:,i] = np.vstack((J_Li.T,J_Ai.T))
     
     return J
 
