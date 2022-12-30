@@ -40,9 +40,24 @@ def get_panda_DH_params():
 
     return dh_params
 
-def get_pose_to_base_from(level: int, pose: list, DH_params: dict) -> np.matrix:
+def get_transform_to_base_from(level: int, pose: list, DH_params: dict, use_inclusive_range: bool=False) -> np.matrix:
     T = np.matrix(np.identity(4))
 
+    # if level == 0:  # use this because range(0) won't calculate anything
+    #     # calculate first Transform 0 <- 1
+    #     cos_th_i = np.cos(pose[0])
+    #     sin_th_i = np.sin(pose[0])
+    #     a_i = DH_params[0]["a"]
+    #     cos_alpha_i = np.cos(DH_params[0]["alpha"])
+    #     sin_alpha_i = np.sin(DH_params[0]["alpha"])
+    #     d_i = DH_params[0]["d"]
+
+    #     # modified DH convention
+    #     T = T @ np.matrix([[cos_th_i, -1*sin_th_i, 0, a_i],
+    #             [sin_th_i*cos_alpha_i, cos_th_i*cos_alpha_i, -1*sin_alpha_i, -1*d_i*sin_alpha_i],
+    #             [sin_th_i*sin_alpha_i, cos_th_i*sin_alpha_i, cos_alpha_i, d_i*cos_alpha_i], 
+    #             [0,0,0,1]])
+        
     for i in range(level):
         cos_th_i = np.cos(pose[i])
         sin_th_i = np.sin(pose[i])
@@ -57,52 +72,68 @@ def get_pose_to_base_from(level: int, pose: list, DH_params: dict) -> np.matrix:
                 [sin_th_i*sin_alpha_i, cos_th_i*sin_alpha_i, cos_alpha_i, d_i*cos_alpha_i], 
                 [0,0,0,1]])
 
-        # classical DH convention
-        # T = T @ np.matrix([[cos_th_i, -1*sin_th_i*cos_alpha_i, sin_th_i*sin_alpha_i, a_i*cos_th_i],
-        #                 [sin_th_i, cos_th_i*cos_alpha_i, -1*cos_th_i*sin_alpha_i, a_i*sin_th_i],
-        #                 [0, sin_alpha_i, cos_alpha_i, d_i], 
-        #                 [0,0,0,1]])
+    if use_inclusive_range or level == 0:
+        # use this because range(0) won't calculate anything
+        # calculate first Transform 0 <- 1
+        cos_th_i = np.cos(pose[level])
+        sin_th_i = np.sin(pose[level])
+        a_i = DH_params[level]["a"]
+        cos_alpha_i = np.cos(DH_params[level]["alpha"])
+        sin_alpha_i = np.sin(DH_params[level]["alpha"])
+        d_i = DH_params[level]["d"]
+
+        # modified DH convention
+        T = T @ np.matrix([[cos_th_i, -1*sin_th_i, 0, a_i],
+                [sin_th_i*cos_alpha_i, cos_th_i*cos_alpha_i, -1*sin_alpha_i, -1*d_i*sin_alpha_i],
+                [sin_th_i*sin_alpha_i, cos_th_i*sin_alpha_i, cos_alpha_i, d_i*cos_alpha_i], 
+                [0,0,0,1]])
+    # i = 0
+    # while i <= level and i < len(DH_params)-1:
+    #     cos_th_i = np.cos(pose[i])
+    #     sin_th_i = np.sin(pose[i])
+    #     a_i = DH_params[i]["a"]
+    #     cos_alpha_i = np.cos(DH_params[i]["alpha"])
+    #     sin_alpha_i = np.sin(DH_params[i]["alpha"])
+    #     d_i = DH_params[i]["d"]
+
+    #     # modified DH convention
+    #     T = T @ np.matrix([[cos_th_i, -1*sin_th_i, 0, a_i],
+    #             [sin_th_i*cos_alpha_i, cos_th_i*cos_alpha_i, -1*sin_alpha_i, -1*d_i*sin_alpha_i],
+    #             [sin_th_i*sin_alpha_i, cos_th_i*sin_alpha_i, cos_alpha_i, d_i*cos_alpha_i], 
+    #             [0,0,0,1]])
+        
+    #     i += 1
+
 
     return T
 
-def get_R_to_base_from(level: int, pose: list, DH_params: dict) -> np.matrix:
-    return get_pose_to_base_from(level, pose, DH_params)[0:3,0:3]  # this is just a wrapper function to get R from T
-
-def construct_P_to_base_from(l:int , q: np.ndarray, DH_params: dict):
-    P = get_pose_to_base_from(l, q, DH_params) @ np.matrix([[0],
-                                                            [0],
-                                                            [0],
-                                                            [1]])
-    return P
-
-def calc_Z(l: int, q: np.ndarray, DH_params: dict) -> np.matrix:
-    Z = get_R_to_base_from(l, q, DH_params) @ np.matrix([[0],
-                                                        [0],
-                                                        [1]])
+def calc_Z(l: int, q: np.ndarray, DH_params: dict, base_pose: np.ndarray) -> np.matrix:
+    Z = (base_pose @ get_transform_to_base_from(l, q, DH_params, use_inclusive_range=True))[:3,:3] @ np.matrix([[0],
+                                                                                    [0],
+                                                                                    [1]])
     return Z
 
-def calc_P(l: int, q: np.ndarray, n_joints: int, DH_params: dict) -> np.matrix:
-    P_to_final_joint_from_effector = np.matrix([[1, 0, 0, 0],
-                                            [0, 1, 0, 0],
-                                            [0, 0, 1, 0.107],
-                                            [0, 0, 0, 1]])
-    P_0E = get_pose_to_base_from(n_joints, q, DH_params) @ np.matrix([[0],
-                                                                    [0],
-                                                                    [0],
-                                                                    [1]])
+def calc_P(l: int, q: np.ndarray, n_joints: int, DH_params: dict, base_pose: np.ndarray) -> np.matrix:
+    P_0E = base_pose @ get_transform_to_base_from(n_joints, q, DH_params) @ np.matrix([[0],
+                                                                                    [0],
+                                                                                    [0],
+                                                                                    [1]])
 
-    P_0_from_i_1 = construct_P_to_base_from(l, q, DH_params)
+    P_0_from_i_1 = base_pose @ get_transform_to_base_from(l, q, DH_params, use_inclusive_range=True) @ np.matrix([[0],
+                                                                                    [0],
+                                                                                    [0],
+                                                                                    [1]])
 
     P = P_0E - P_0_from_i_1
 
     return P[0:3,0]
 
-def construct_jacobian(n_joints: int, q: np.ndarray, DH_params: dict):
+def construct_jacobian(n_joints: int, q: np.ndarray, DH_params: dict, base_pose: np.ndarray):
     J = np.matrix(np.zeros((6,n_joints)))
 
     for i in range(n_joints):
-        Z = calc_Z(i, q, DH_params)
-        P = calc_P(i, q, n_joints, DH_params)
+        Z = calc_Z(i, q, DH_params, base_pose)
+        P = calc_P(i, q, n_joints, DH_params, base_pose)
 
         J_Li = np.cross(np.squeeze(Z), np.squeeze(P))
         J_Ai = np.squeeze(Z)
@@ -133,11 +164,11 @@ def your_fk(robot, DH_params : dict, q : list or tuple or np.ndarray) -> np.ndar
     #### your code ####
 
     # A = ? # may be more than one line
-    A = A @ get_pose_to_base_from(7, q, DH_params)
+    A = A @ get_transform_to_base_from(7, q, DH_params)
         
     # jacobian = ? # may be more than one line
-    n_joints = 7
-    jacobian = construct_jacobian(n_joints, q, DH_params)    
+    n_joints = len(DH_params)
+    jacobian = construct_jacobian(n_joints, q, DH_params, get_matrix_from_pose(base_pose))    
 
     # -45 degree adjustment along z axis
     # details : see "pybullet_robot_envs/panda_envs/robot_data/franka_panda/panda_model.urdf"
