@@ -40,7 +40,7 @@ def get_panda_DH_params():
 
     return dh_params
 
-def get_transform_to_base_from(level: int, pose: list, DH_params: dict) -> np.matrix:
+def get_pose_to_base_from(level: int, pose: list, DH_params: dict) -> np.matrix:
     T = np.matrix(np.identity(4))
 
     for i in range(level):
@@ -51,21 +51,28 @@ def get_transform_to_base_from(level: int, pose: list, DH_params: dict) -> np.ma
         sin_alpha_i = np.sin(DH_params[i]["alpha"])
         d_i = DH_params[i]["d"]
 
+        # modified DH convention
         T = T @ np.matrix([[cos_th_i, -1*sin_th_i, 0, a_i],
                 [sin_th_i*cos_alpha_i, cos_th_i*cos_alpha_i, -1*sin_alpha_i, -1*d_i*sin_alpha_i],
                 [sin_th_i*sin_alpha_i, cos_th_i*sin_alpha_i, cos_alpha_i, d_i*cos_alpha_i], 
                 [0,0,0,1]])
 
+        # classical DH convention
+        # T = T @ np.matrix([[cos_th_i, -1*sin_th_i*cos_alpha_i, sin_th_i*sin_alpha_i, a_i*cos_th_i],
+        #                 [sin_th_i, cos_th_i*cos_alpha_i, -1*cos_th_i*sin_alpha_i, a_i*sin_th_i],
+        #                 [0, sin_alpha_i, cos_alpha_i, d_i], 
+        #                 [0,0,0,1]])
+
     return T
 
 def get_R_to_base_from(level: int, pose: list, DH_params: dict) -> np.matrix:
-    return get_transform_to_base_from(level, pose, DH_params)[0:3,0:3]  # this is just a wrapper function to get R from T
+    return get_pose_to_base_from(level, pose, DH_params)[0:3,0:3]  # this is just a wrapper function to get R from T
 
 def construct_P_to_base_from(l:int , q: np.ndarray, DH_params: dict):
-    P = get_transform_to_base_from(l, q, DH_params) @ np.matrix([[0],
-                                                                [0],
-                                                                [0],
-                                                                [1]])
+    P = get_pose_to_base_from(l, q, DH_params) @ np.matrix([[0],
+                                                            [0],
+                                                            [0],
+                                                            [1]])
     return P
 
 def calc_Z(l: int, q: np.ndarray, DH_params: dict) -> np.matrix:
@@ -79,10 +86,10 @@ def calc_P(l: int, q: np.ndarray, n_joints: int, DH_params: dict) -> np.matrix:
                                             [0, 1, 0, 0],
                                             [0, 0, 1, 0.107],
                                             [0, 0, 0, 1]])
-    P_0E = get_transform_to_base_from(n_joints, q, DH_params) @ P_to_final_joint_from_effector @ np.matrix([[0],
-                                                                                                            [0],
-                                                                                                            [0],
-                                                                                                            [1]])
+    P_0E = get_pose_to_base_from(n_joints, q, DH_params) @ np.matrix([[0],
+                                                                    [0],
+                                                                    [0],
+                                                                    [1]])
 
     P_0_from_i_1 = construct_P_to_base_from(l, q, DH_params)
 
@@ -126,10 +133,10 @@ def your_fk(robot, DH_params : dict, q : list or tuple or np.ndarray) -> np.ndar
     #### your code ####
 
     # A = ? # may be more than one line
-    A = A@get_transform_to_base_from(7, q, DH_params)
+    A = A @ get_pose_to_base_from(7, q, DH_params)
         
     # jacobian = ? # may be more than one line
-    n_joints = 7  # 420 hehe
+    n_joints = 7
     jacobian = construct_jacobian(n_joints, q, DH_params)    
 
     # -45 degree adjustment along z axis
@@ -195,6 +202,8 @@ def score_fk(robot, testcase_files : str, visualize : bool=False):
                 fk_score[file_id] -= penalty
                 fk_error_cnt[file_id] += 1
 
+            print("Your jacobian=\n", your_jacobian)
+            print("GT jacobian=\n", jacobians[i])
             jacobian_error = np.linalg.norm(your_jacobian - np.asarray(jacobians[i]), ord=2)
             if jacobian_error > JACOBIAN_ERROR_THRESH:
                 jacobian_score[file_id] -= penalty
