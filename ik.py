@@ -8,10 +8,10 @@ import pybullet as p
 import pybullet_data
 
 # for geometry information
-from utils.bullet_utils import draw_coordinate, get_matrix_from_pose, get_pose_from_matrix
+from utils.bullet_utils import draw_coordinate, get_matrix_from_pose, get_pose_from_matrix, pose_7d_to_6d, pose_6d_to_7d
 
 # you may use your forward kinematic algorithm to compute 
-from fk import your_fk, get_panda_DH_params
+from fk import your_fk, get_panda_DH_params, construct_jacobian
 
 SIM_TIMESTEP = 1.0 / 240.0
 TASK2_SCORE_MAX = 40
@@ -31,6 +31,25 @@ def pybullet_ik(robot, new_pose : list or tuple or np.ndarray,
                                                 physicsClientId=robot._physics_client_id)
     
     return joint_poses
+
+
+
+def calc_J_sharp(num_q: int, q: np.ndarray, DH_params: dict, base_pose: np.ndarray) -> np.matrix:
+    J = construct_jacobian(num_q, q, DH_params, base_pose)
+
+    J_sharp = J.T @ np.linalg.inv(J @ J.T)
+
+    return np.matrix(J_sharp)
+
+def is_within_limits(joint_limits: list, cur_q: list or np.matrix) -> bool:
+    for i in range(len(cur_q)):
+        if not joint_limits[i][0] < cur_q[i] < joint_limits[i][1]:
+            return False
+    # for i, joint_value in enumerate(cur_q):
+    #     if not joint_limits[i][0] < joint_value < joint_limits[i][1]:
+    #         return False
+
+    return True
 
 def your_ik(robot, new_pose : list or tuple or np.ndarray, 
                 max_iters : int=1000, stop_thresh : float=.001):
@@ -69,6 +88,45 @@ def your_ik(robot, new_pose : list or tuple or np.ndarray,
     # 1. You may use `your_fk` function and jacobian matrix to do this
     # 2. Be careful when computing the delta x
     # 3. You may use some hyper parameters (i.e., step rate) in optimization loops
+
+    DH_params = get_panda_DH_params()  # get DH params from fk file
+    base_pos = robot._base_position
+    base_pose = list(base_pos) + [0, 0, 0, 1]
+    A = get_matrix_from_pose(base_pose) # a 4x4 matrix, type should be np.ndarray
+    
+    alpha = 0.01  # TODO check if this value can be iteratively adjusted according to convergence rate
+    cur_it = 0
+
+    # calculate initial values
+    x_cur, _ = your_fk(robot, DH_params, tmp_q)
+    delta_x = np.array(pose_7d_to_6d(new_pose)) - np.array(pose_7d_to_6d(x_cur))
+
+    threshold_reached = False
+    q_new = tmp_q
+    while cur_it < max_iters:
+        J_sharp = calc_J_sharp(len(tmp_q), q_new, DH_params, A)
+
+        delta_q = np.multiply(alpha, J_sharp @ delta_x).astype(float)  # alpha*J_sharp*delta_x and then force-cast it to float
+
+        q_new = q_new + delta_q
+        q_new = np.squeeze(np.array(q_new))  # this is to remove the weird shape it sometimes has and nested matrices
+        if not is_within_limits(joint_limits, q_new):  # TODO what should we do in this case?
+            break
+        
+        tmp_q = q_new
+        x_cur, _ = your_fk(robot, DH_params, tmp_q)
+        delta_x = np.array(pose_7d_to_6d(new_pose)) - np.array(pose_7d_to_6d(x_cur))
+        if np.sum(delta_x <= stop_thresh) == 6:
+            threshold_reached = True
+            break
+
+        cur_it += 1
+        
+
+    if threshold_reached:
+        print("Sucessfully reached desired pose! (7D) = ", list(tmp_q))
+    else:
+        print("Desired pose not reached! (7D) = ", list(tmp_q))
 
     ###################
 

@@ -41,6 +41,11 @@ def get_panda_DH_params():
     return dh_params
 
 def get_transform_to_base_from(level: int, pose: list, DH_params: dict, use_inclusive_range: bool=False) -> np.matrix:
+    """
+        This function is so complicated because it calculates the T for either all the joints, meaning from 0 <- E, 
+        and at the same time, it must be able to compute the transformation T from any point of reference towards 0.
+    """
+    
     T = np.matrix(np.identity(4))
 
     if level != len(DH_params):
@@ -62,7 +67,9 @@ def get_transform_to_base_from(level: int, pose: list, DH_params: dict, use_incl
 
     if use_inclusive_range:
         # use this because range(0) won't calculate anything
-        # calculate first Transform 0 <- 1
+        # this case will be ran every time the desired transform is not 
+        # the full one from base to last joint, but only a 
+        # part from it
         cos_th_i = np.cos(pose[level])
         sin_th_i = np.sin(pose[level])
         a_i = DH_params[level]["a"]
@@ -99,7 +106,7 @@ def calc_P(l: int, q: np.ndarray, n_joints: int, DH_params: dict, base_pose: np.
 
     return P[0:3,0]
 
-def construct_jacobian(n_joints: int, q: np.ndarray, DH_params: dict, base_pose: np.ndarray):
+def construct_jacobian(n_joints: int, q: np.ndarray, DH_params: dict, base_pose: np.ndarray) -> np.matrix:
     J = np.matrix(np.zeros((6,n_joints)))
 
     for i in range(n_joints):
