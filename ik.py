@@ -52,7 +52,7 @@ def is_within_limits(joint_limits: list, cur_q: list or np.matrix) -> bool:
     return True
 
 def your_ik(robot, new_pose : list or tuple or np.ndarray, 
-                max_iters : int=1000, stop_thresh : float=.001):
+                max_iters : int=10000, stop_thresh : float=.001):
 
     # you may use this params to avoid joint limit
     joint_limits = np.asarray([
@@ -116,7 +116,8 @@ def your_ik(robot, new_pose : list or tuple or np.ndarray,
         tmp_q = q_new
         x_cur, _ = your_fk(robot, DH_params, tmp_q)
         delta_x = np.array(pose_7d_to_6d(new_pose)) - np.array(pose_7d_to_6d(x_cur))
-        if np.sum(delta_x <= stop_thresh) == 6:
+        if np.linalg.norm(delta_x) <= stop_thresh:
+            print("[Info] Iteration number ", cur_it)
             threshold_reached = True
             break
 
@@ -124,10 +125,11 @@ def your_ik(robot, new_pose : list or tuple or np.ndarray,
         
 
     if threshold_reached:
-        print("Sucessfully reached desired pose! (7D) = ", list(tmp_q))
+        print("[Info] Sucessfully reached desired pose! (7D) = ", list(tmp_q))
     else:
-        print("Desired pose not reached! (7D) = ", list(tmp_q))
+        print("[Info] Desired pose not reached! (7D) = ", list(tmp_q))
 
+    print("[Info] Gripper Pos (2D) = ", list(gripper_pos))
     ###################
 
     return list(tmp_q) + list(gripper_pos) # 9 DoF
@@ -187,7 +189,8 @@ def score_ik(robot, testcase_files : str, visualize : bool=False):
             your_joint_poses = your_ik(robot, poses[i]) 
 
             # You can use `pybullet_ik` to see the correct version 
-            # your_joint_poses = pybullet_ik(robot, poses[i]) 
+            # your_joint_poses = pybullet_ik(robot, poses[i])
+            print("PYBULLET implementation says \n", str(pybullet_ik(robot, poses[i])))
             
             gt_pose = poses[i]
 
