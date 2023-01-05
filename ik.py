@@ -45,14 +45,11 @@ def is_within_limits(joint_limits: list, cur_q: list or np.matrix) -> bool:
     for i in range(len(cur_q)):
         if not joint_limits[i][0] < cur_q[i] < joint_limits[i][1]:
             return False
-    # for i, joint_value in enumerate(cur_q):
-    #     if not joint_limits[i][0] < joint_value < joint_limits[i][1]:
-    #         return False
 
     return True
 
 def your_ik(robot, new_pose : list or tuple or np.ndarray, 
-                max_iters : int=10000, stop_thresh : float=.001):
+                max_iters : int=15000, stop_thresh : float=.001):
 
     # you may use this params to avoid joint limit
     joint_limits = np.asarray([
@@ -111,6 +108,7 @@ def your_ik(robot, new_pose : list or tuple or np.ndarray,
         q_new = q_new + delta_q
         q_new = np.squeeze(np.array(q_new))  # this is to remove the weird shape it sometimes has and nested matrices
         if not is_within_limits(joint_limits, q_new):  # TODO what should we do in this case?
+            print("[Info] Joint limits reached! Aborting")
             break
         
         tmp_q = q_new
@@ -126,10 +124,10 @@ def your_ik(robot, new_pose : list or tuple or np.ndarray,
 
     if threshold_reached:
         print("[Info] Sucessfully reached desired pose! (7D) = ", list(tmp_q))
+        print("[Info] Gripper Pos (2D) = ", list(gripper_pos))
     else:
         print("[Info] Desired pose not reached! (7D) = ", list(tmp_q))
 
-    print("[Info] Gripper Pos (2D) = ", list(gripper_pos))
     ###################
 
     return list(tmp_q) + list(gripper_pos) # 9 DoF
